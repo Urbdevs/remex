@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch/PR
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. Smart contracts ──────────────────────────────────────
+  test-contracts:
+    name: Contracts (compile + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/contracts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: packages/contracts/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npm run compile
+
+      - name: Run Hardhat tests
+        run: npm test
+
+  # ── 2. Backend API ──────────────────────────────────────────
+  test-api:
+    name: API (vitest · 150 tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/api
+
+    # All tests mock DB and Redis — no service containers needed.
+    env:
+      NODE_ENV: test
+      JWT_SECRET:                   ${{ secrets.CI_JWT_SECRET }}
+      ADMIN_API_KEY:                ${{ secrets.CI_ADMIN_API_KEY }}
+      NOTIFICATION_ENCRYPTION_KEY:  ${{ secrets.CI_ENCRYPTION_KEY }}
+      # Non-sensitive defaults (mocked in tests — values only need to satisfy env checks)
+      DATABASE_URL:        postgresql://localhost:5432/remex_test
+      REDIS_HOST:          localhost
+      REDIS_PORT:          "6379"
+      BITSO_API_KEY:       test
+      BITSO_API_SECRET:    test
+      PERSONA_API_KEY:     test
+      PERSONA_TEMPLATE_ID: itmpl_test
+      RESEND_API_KEY:      test
+      RESEND_FROM:         test@remex.mx
+      TWILIO_ACCOUNT_SID:  test
+      TWILIO_AUTH_TOKEN:   test
+      TWILIO_WHATSAPP_FROM: "whatsapp:+14155238886"
+      CONTRACT_ADDRESS:    "0x0000000000000000000000000000000000000000"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: packages/api/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Vitest
+        run: npm test
+
+  # ── 3. Frontend ─────────────────────────────────────────────
+  build-web:
+    name: Web (next build + lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/web
+
+    env:
+      NEXT_PUBLIC_API_URL:              https://api-testnet.remex.mx
+      NEXT_PUBLIC_NETWORK:              testnet
+      NEXT_PUBLIC_CONTRACT_ADDRESS:     ${{ secrets.TESTNET_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000' }}
+      NEXT_PUBLIC_USDC_ADDRESS:         "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+      NEXT_PUBLIC_BASE_RPC_URL:         https://sepolia.base.org
+      NEXT_PUBLIC_BASESCAN_URL:         https://sepolia.basescan.org
+      NEXT_PUBLIC_PERSONA_TEMPLATE_ID:  ${{ secrets.PERSONA_TEMPLATE_ID || 'itmpl_placeholder' }}
+      NEXT_PUBLIC_PERSONA_ENV:          sandbox
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: packages/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint

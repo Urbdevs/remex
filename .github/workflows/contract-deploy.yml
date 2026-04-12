@@ -1,0 +1,147 @@
+name: Contract Deploy
+
+# Manual trigger only — contracts are immutable, never auto-deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: Target network
+        required: true
+        default: baseSepolia
+        type: choice
+        options:
+          - baseSepolia
+          - base
+
+      run_smoke_test:
+        description: Run smoke test after deploy?
+        required: false
+        default: "true"
+        type: boolean
+
+      transfer_ownership:
+        description: Transfer ownership to Gnosis Safe (requires GNOSIS_SAFE_ADDRESS secret)?
+        required: false
+        default: "false"
+        type: boolean
+
+permissions:
+  contents: read
+  # Required to update TESTNET_CONTRACT_ADDRESS secret after deploy.
+  # Uses GH_PAT (Personal Access Token with repo scope) — see secrets setup.
+
+jobs:
+  deploy-contract:
+    name: Deploy RemexBridge → ${{ inputs.network }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/contracts
+
+    environment:
+      name: ${{ inputs.network == 'base' && 'mainnet' || 'testnet' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: packages/contracts/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npm run compile
+
+      # ── Deploy ──────────────────────────────────────────────
+      - name: Deploy to ${{ inputs.network }}
+        id: deploy
+        run: |
+          # Capture deploy output and extract the contract address
+          OUTPUT=$(npm run deploy:${{ inputs.network == 'base' && 'mainnet' || 'testnet' }} 2>&1)
+          echo "$OUTPUT"
+
+          # Parse the deployed address from the summary line
+          ADDRESS=$(echo "$OUTPUT" | grep -oP '(?<=Deployed at: )0x[a-fA-F0-9]{40}' | tail -1)
+          if [ -z "$ADDRESS" ]; then
+            echo "ERROR: Could not parse contract address from deploy output"
+            exit 1
+          fi
+
+          echo "CONTRACT_ADDRESS=$ADDRESS" >> "$GITHUB_ENV"
+          echo "address=$ADDRESS"          >> "$GITHUB_OUTPUT"
+          echo ""
+          echo "Deployed at: $ADDRESS"
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          TREASURY_ADDRESS:     ${{ secrets.TREASURY_ADDRESS }}
+          RELAYER_ADDRESS:      ${{ secrets.RELAYER_ADDRESS }}
+          BASESCAN_API_KEY:     ${{ secrets.BASESCAN_API_KEY }}
+          BASE_SEPOLIA_RPC:     ${{ secrets.BASE_SEPOLIA_RPC }}
+          BASE_MAINNET_RPC:     ${{ secrets.BASE_MAINNET_RPC }}
+          GNOSIS_SAFE_ADDRESS:  ${{ inputs.transfer_ownership == 'true' && secrets.GNOSIS_SAFE_ADDRESS || '' }}
+
+      # ── Verify checklist ────────────────────────────────────
+      - name: Run verification checklist
+        run: npm run check:${{ inputs.network == 'base' && 'mainnet' || 'testnet' }}
+        env:
+          CONTRACT_ADDRESS:  ${{ steps.deploy.outputs.address }}
+          RELAYER_ADDRESS:   ${{ secrets.RELAYER_ADDRESS }}
+          TREASURY_ADDRESS:  ${{ secrets.TREASURY_ADDRESS }}
+          BASE_SEPOLIA_RPC:  ${{ secrets.BASE_SEPOLIA_RPC }}
+          BASE_MAINNET_RPC:  ${{ secrets.BASE_MAINNET_RPC }}
+          GNOSIS_SAFE_ADDRESS: ${{ secrets.GNOSIS_SAFE_ADDRESS }}
+
+      # ── Smoke test ──────────────────────────────────────────
+      - name: Run smoke test
+        if: ${{ inputs.run_smoke_test == 'true' || inputs.run_smoke_test == true }}
+        run: npm run smoke:${{ inputs.network == 'base' && 'mainnet' || 'testnet' }}
+        env:
+          CONTRACT_ADDRESS:    ${{ steps.deploy.outputs.address }}
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          BASE_SEPOLIA_RPC:    ${{ secrets.BASE_SEPOLIA_RPC }}
+          BASE_MAINNET_RPC:    ${{ secrets.BASE_MAINNET_RPC }}
+
+      # ── Update TESTNET_CONTRACT_ADDRESS secret ───────────────
+      # Uses a PAT (GH_PAT) with `repo` scope to write the new address as a secret.
+      # This ensures the next `deploy.yml` and CI `build-web` job picks up the
+      # latest contract address automatically.
+      - name: Update TESTNET_CONTRACT_ADDRESS secret
+        if: ${{ inputs.network == 'baseSepolia' && steps.deploy.outputs.address != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          REPO:     ${{ github.repository }}
+          ADDRESS:  ${{ steps.deploy.outputs.address }}
+        run: |
+          gh secret set TESTNET_CONTRACT_ADDRESS \
+            --repo "$REPO" \
+            --body "$ADDRESS"
+          echo "Updated TESTNET_CONTRACT_ADDRESS → $ADDRESS"
+
+      # ── Job summary ─────────────────────────────────────────
+      - name: Write job summary
+        if: always()
+        run: |
+          NETWORK="${{ inputs.network }}"
+          ADDRESS="${{ steps.deploy.outputs.address }}"
+          if [ "$NETWORK" = "base" ]; then
+            EXPLORER="https://basescan.org"
+          else
+            EXPLORER="https://sepolia.basescan.org"
+          fi
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ## RemexBridge Deployment — ${NETWORK}
+
+          | Field    | Value |
+          |----------|-------|
+          | Network  | \`${NETWORK}\` |
+          | Address  | \`${ADDRESS}\` |
+          | Explorer | [${ADDRESS}](${EXPLORER}/address/${ADDRESS}) |
+
+          ### Next steps
+          - Update \`.env\` files with \`CONTRACT_ADDRESS=${ADDRESS}\`
+          $([ "${{ inputs.transfer_ownership }}" = "true" ] && echo "- Gnosis Safe must call \`acceptOwnership()\` on \`${ADDRESS}\`" || echo "- Set \`GNOSIS_SAFE_ADDRESS\` and re-run with *Transfer ownership* enabled")
+          EOF

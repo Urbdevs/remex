@@ -1,0 +1,26 @@
+{
+  "name": "@remex/contracts",
+  "version": "1.0.0",
+  "description": "RemexBridge smart contracts — Base L2",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:coverage": "hardhat coverage",
+    "deploy:testnet": "hardhat run scripts/deploy.ts --network baseSepolia",
+    "deploy:mainnet": "hardhat run scripts/deploy.ts --network base",
+    "smoke:testnet": "hardhat run scripts/smokeTest.ts --network baseSepolia",
+    "smoke:mainnet": "hardhat run scripts/smokeTest.ts --network base",
+    "check:testnet": "hardhat run scripts/verify.ts --network baseSepolia",
+    "check:mainnet": "hardhat run scripts/verify.ts --network base",
+    "verify": "hardhat verify"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "hardhat": "^2.19.0",
+    "typescript": "^5.3.0",
+    "ts-node": "^10.9.0",
+    "@types/node": "^20.0.0",
+    "dotenv": "^16.0.0"
+  }
+}

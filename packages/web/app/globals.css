@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter:         'Inter', sans-serif;
+    --font-ibm-plex-mono: 'IBM Plex Mono', monospace;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+
+  /* Number inputs — hide spinners */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] { -moz-appearance: textfield; }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl border border-gray-200 shadow-sm;
+  }
+
+  .section-title {
+    @apply text-xl font-bold text-gray-900;
+  }
+
+  .label {
+    @apply text-xs font-medium text-gray-500 uppercase tracking-wide;
+  }
+
+  /* Amount display — large mono numbers */
+  .amount-display {
+    @apply font-mono text-3xl font-semibold tabular-nums;
+  }
+}

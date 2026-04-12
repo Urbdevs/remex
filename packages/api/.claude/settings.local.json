@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(npx vitest:*)",
+      "Bash(head -60 C:/ClaudeCode/remex/packages/contracts/test/*.ts)",
+      "Bash(grep -E \"\\\\.\\(gitignore|npmrc|nvmrc|node-version\\)$|package\\\\.json$\")",
+      "Bash(echo \"Exit: $?\")"
+    ]
+  }
+}
