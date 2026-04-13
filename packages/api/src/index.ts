@@ -13,6 +13,14 @@ import authPlugin from './plugins/auth';
 import { startBridgeListener } from './listeners/bridgeListener';
 import { connectDB } from './db/client';
 
+// Extiende FastifyContextConfig para permitir rawBody: true en rutas que
+// necesitan el body crudo (p. ej. verificación de firma en webhooks).
+declare module 'fastify' {
+  interface FastifyContextConfig {
+    rawBody?: boolean;
+  }
+}
+
 config();
 
 const server = Fastify({ logger: false });

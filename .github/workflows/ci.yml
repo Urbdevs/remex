@@ -117,3 +117,42 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  # ── 4. Deploy API → Railway ─────────────────────────────────
+  # TODO: configurar cuando tengamos las credenciales de producción
+  # deploy-api:
+  #   name: Deploy API → Railway
+  #   runs-on: ubuntu-latest
+  #   needs: [test-contracts, test-api]
+  #   if: github.ref == 'refs/heads/main'
+  #
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Install Railway CLI
+  #       run: npm install -g @railway/cli
+  #
+  #     - name: Deploy to Railway
+  #       run: railway up --service api
+  #       env:
+  #         RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  # ── 5. Deploy Web → Vercel ──────────────────────────────────
+  # TODO: configurar cuando tengamos las credenciales de producción
+  # deploy-web:
+  #   name: Deploy Web → Vercel
+  #   runs-on: ubuntu-latest
+  #   needs: [build-web]
+  #   if: github.ref == 'refs/heads/main'
+  #
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Install Vercel CLI
+  #       run: npm install -g vercel
+  #
+  #     - name: Deploy to Vercel
+  #       run: vercel --prod --token ${{ secrets.VERCEL_TOKEN }}
+  #       env:
+  #         VERCEL_ORG_ID:     ${{ secrets.VERCEL_ORG_ID }}
+  #         VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
