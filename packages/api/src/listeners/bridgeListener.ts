@@ -1,44 +1,44 @@
 import { createPublicClient, http, parseAbiItem } from 'viem';
-import { base, baseSepolia } from 'viem/chains';
+import { base } from 'viem/chains';
 import { logger } from '../services/logger';
 import { processRemittance } from '../jobs/remittanceQueue';
 
-// ── CONFIGURACIÓN ─────────────────────────────────────
-const isMainnet = process.env.NETWORK === 'mainnet';
+const POLLING_INTERVAL_MS = 4_000;
 
-const chain = isMainnet ? base : baseSepolia;
-const rpcUrl = isMainnet
-  ? (process.env.BASE_MAINNET_RPC ?? 'https://mainnet.base.org')
-  : (process.env.BASE_SEPOLIA_RPC ?? 'https://sepolia.base.org');
-
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS as `0x${string}`;
-
-// ── ABI DEL EVENTO ────────────────────────────────────
 const REMITTANCE_SENT_EVENT = parseAbiItem(
   'event RemittanceSent(uint256 indexed remittanceId, address indexed sender, uint256 amount, uint256 feeAmount, bytes32 indexed clabeHash, bytes32 recipientHash, uint64 timestamp)'
 );
 
-// ── CLIENTE VIEM (read-only) ──────────────────────────
-const publicClient = createPublicClient({
-  chain,
-  transport: http(rpcUrl),
-});
-
-// ── LISTENER PRINCIPAL ────────────────────────────────
 export async function startBridgeListener(): Promise<void> {
-  if (!CONTRACT_ADDRESS) {
+  const contractAddress = process.env.CONTRACT_ADDRESS as `0x${string}`;
+  if (!contractAddress) {
     logger.warn('CONTRACT_ADDRESS not set — bridge listener disabled');
     return;
   }
 
-  logger.info({ contract: CONTRACT_ADDRESS, network: chain.name }, 'Starting bridge listener');
+  const rpcUrl = process.env.BASE_MAINNET_RPC ?? 'https://mainnet.base.org';
+  const client = createPublicClient({ chain: base, transport: http(rpcUrl) });
 
-  // Escucha eventos en tiempo real (websocket-like polling)
-  publicClient.watchContractEvent({
-    address: CONTRACT_ADDRESS,
-    abi: [REMITTANCE_SENT_EVENT],
-    eventName: 'RemittanceSent',
-    onLogs: async (logs) => {
+  // Arranca desde el bloque actual — no reprocesa historia
+  let fromBlock = await client.getBlockNumber();
+
+  logger.info(
+    { contract: contractAddress, network: base.name, fromBlock: fromBlock.toString() },
+    'Starting bridge listener',
+  );
+
+  const poll = async () => {
+    try {
+      const toBlock = await client.getBlockNumber();
+      if (toBlock < fromBlock) return;
+
+      const logs = await client.getLogs({
+        address:   contractAddress,
+        event:     REMITTANCE_SENT_EVENT,
+        fromBlock,
+        toBlock,
+      });
+
       for (const log of logs) {
         const { remittanceId, sender, amount, feeAmount, clabeHash, recipientHash, timestamp } =
           log.args;
@@ -47,13 +47,12 @@ export async function startBridgeListener(): Promise<void> {
           {
             remittanceId: remittanceId?.toString(),
             sender,
-            amount: amount?.toString(),
-            txHash: log.transactionHash,
+            amount:       amount?.toString(),
+            txHash:       log.transactionHash,
           },
-          'RemittanceSent event detected'
+          'RemittanceSent event detected',
         );
 
-        // Encola el job para procesar el off-ramp
         await processRemittance({
           remittanceId:  remittanceId!.toString(),
           sender:        sender!,
@@ -66,9 +65,20 @@ export async function startBridgeListener(): Promise<void> {
           blockNumber:   log.blockNumber!.toString(),
         });
       }
-    },
-    onError: (error) => {
-      logger.error({ error }, 'Bridge listener error');
-    },
-  });
+
+      fromBlock = toBlock + 1n;
+    } catch (err) {
+      logger.error({ err }, 'Bridge listener poll error');
+    }
+  };
+
+  // Primer poll inmediato, luego cada 4s secuencialmente (sin solapamiento)
+  const scheduleNext = () =>
+    setTimeout(async () => {
+      await poll();
+      scheduleNext();
+    }, POLLING_INTERVAL_MS);
+
+  await poll();
+  scheduleNext();
 }

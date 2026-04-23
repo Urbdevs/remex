@@ -41,7 +41,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER remittances_updated_at
+CREATE OR REPLACE TRIGGER remittances_updated_at
   BEFORE UPDATE ON remittances
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_wallet
   ON users (wallet_address);
 
-CREATE TRIGGER users_updated_at
+CREATE OR REPLACE TRIGGER users_updated_at
   BEFORE UPDATE ON users
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 

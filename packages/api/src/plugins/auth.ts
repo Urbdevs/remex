@@ -57,6 +57,11 @@ async function authPlugin(server: FastifyInstance) {
   // ── DECORATOR: requireKYC ──────────────────────────
   // Verifica JWT válido + KYC aprobado.
   // Cumplimiento FinCEN: ninguna transferencia sin identidad verificada.
+  // En development con SKIP_KYC_DEV=true se omite el check para facilitar pruebas.
+  const skipKycDev =
+    process.env.NODE_ENV === 'development' &&
+    process.env.SKIP_KYC_DEV === 'true';
+
   server.decorate(
     'requireKYC',
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -66,7 +71,7 @@ async function authPlugin(server: FastifyInstance) {
         return reply.status(401).send({ error: 'Unauthorized', message: 'Invalid or expired token' });
       }
 
-      if (request.user.kyc !== 'approved') {
+      if (!skipKycDev && request.user.kyc !== 'approved') {
         return reply.status(403).send({
           error:   'KYC_REQUIRED',
           message: 'Identity verification required to send remittances',

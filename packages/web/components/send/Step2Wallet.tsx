@@ -22,6 +22,12 @@ export function Step2Wallet({ form, onNext, onBack }: Props) {
   const { connect, isPending: connectPending } = useConnect();
   const { user, loading: authLoading } = useAuth();
 
+  // Bypass KYC check in development when NEXT_PUBLIC_SKIP_KYC_DEV=true
+  const skipKycDev =
+    process.env.NEXT_PUBLIC_SKIP_KYC_DEV === 'true' &&
+    process.env.NODE_ENV === 'development';
+  const kycApproved = skipKycDev || user?.kyc_status === 'approved';
+
   // Read USDC balance
   const { data: usdcBalance } = useReadContract({
     abi:          ERC20_ABI,
@@ -117,8 +123,8 @@ export function Step2Wallet({ form, onNext, onBack }: Props) {
             </div>
           ) : null}
 
-          {/* KYC warning */}
-          {user && user.kyc_status !== 'approved' && (
+          {/* KYC warning — hidden when skipKycDev=true */}
+          {user && !kycApproved && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
               <p className="font-semibold">⚠️ Verificación de identidad requerida</p>
               <p className="text-xs mt-1">
@@ -137,7 +143,7 @@ export function Step2Wallet({ form, onNext, onBack }: Props) {
         <Button
           size="lg"
           fullWidth
-          disabled={!isReady || needsMore || user?.kyc_status !== 'approved'}
+          disabled={!isReady || needsMore || !kycApproved}
           onClick={onNext}
         >
           Siguiente: Revisar →

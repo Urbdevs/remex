@@ -1,4 +1,4 @@
-import { createWalletClient, createPublicClient, http, parseAbi } from 'viem';
+import { createWalletClient, createPublicClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base, baseSepolia } from 'viem/chains';
 import { logger } from './logger';
@@ -13,13 +13,57 @@ const rpcUrl    = isMainnet
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS as `0x${string}`;
 
 // ── ABI (solo las funciones que usa el backend) ───────
-const BRIDGE_ABI = parseAbi([
-  'function markProcessing(uint256 remittanceId) external',
-  'function confirmDelivery(uint256 remittanceId, string calldata speiReference, uint256 mxnAmount) external',
-  'function refund(uint256 remittanceId, string calldata reason) external',
-  'function withdrawForSettlement(uint256 remittanceId, address hotWallet) external',
-  'function getRemittance(uint256 id) external view returns (tuple(address sender, uint256 amount, uint256 feeAmount, bytes32 clabeHash, bytes32 recipientHash, uint64 createdAt, uint64 resolvedAt, uint8 status))',
-]);
+// Formato JSON de ABI requerido para funciones que devuelven tuple con components.
+// parseAbi() de viem no soporta la sintaxis tuple(...) en human-readable strings.
+const BRIDGE_ABI = [
+  {
+    type: 'function', name: 'markProcessing', stateMutability: 'nonpayable',
+    inputs:  [{ name: 'remittanceId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function', name: 'confirmDelivery', stateMutability: 'nonpayable',
+    inputs:  [
+      { name: 'remittanceId',  type: 'uint256' },
+      { name: 'speiReference', type: 'string'  },
+      { name: 'mxnAmount',     type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function', name: 'refund', stateMutability: 'nonpayable',
+    inputs:  [
+      { name: 'remittanceId', type: 'uint256' },
+      { name: 'reason',       type: 'string'  },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function', name: 'withdrawForSettlement', stateMutability: 'nonpayable',
+    inputs:  [
+      { name: 'remittanceId', type: 'uint256' },
+      { name: 'hotWallet',    type: 'address' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function', name: 'getRemittance', stateMutability: 'view',
+    inputs:  [{ name: 'id', type: 'uint256' }],
+    outputs: [{
+      name: '', type: 'tuple',
+      components: [
+        { name: 'sender',        type: 'address' },
+        { name: 'amount',        type: 'uint256' },
+        { name: 'feeAmount',     type: 'uint256' },
+        { name: 'clabeHash',     type: 'bytes32' },
+        { name: 'recipientHash', type: 'bytes32' },
+        { name: 'createdAt',     type: 'uint64'  },
+        { name: 'resolvedAt',    type: 'uint64'  },
+        { name: 'status',        type: 'uint8'   },
+      ],
+    }],
+  },
+] as const;
 
 // ── CLIENTE CON WALLET (para escribir al contrato) ────
 class BridgeService {

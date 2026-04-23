@@ -1,8 +1,8 @@
+import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
-import { config } from 'dotenv';
 import { logger } from './services/logger';
 import { transferRoutes } from './routes/transfers';
 import { healthRoutes } from './routes/health';
@@ -20,8 +20,6 @@ declare module 'fastify' {
     rawBody?: boolean;
   }
 }
-
-config();
 
 const server = Fastify({ logger: false });
 
@@ -55,16 +53,16 @@ async function bootstrap() {
   // Plugin JWT + decoradores authenticate / requireKYC
   await server.register(authPlugin);
 
+  // ── DATABASE ─────────────────────────────────────
+  await connectDB();
+  logger.info('Database connected');
+
   // ── ROUTES ───────────────────────────────────────
   await server.register(healthRoutes,   { prefix: '/health' });
   await server.register(authRoutes,     { prefix: '/v1/auth' });
   await server.register(kycRoutes,      { prefix: '/v1/kyc' });
   await server.register(transferRoutes, { prefix: '/v1/transfers' });
   await server.register(adminRoutes,    { prefix: '/v1/admin' });
-
-  // ── DATABASE ─────────────────────────────────────
-  await connectDB();
-  logger.info('Database connected');
 
   // ── BLOCKCHAIN LISTENER ──────────────────────────
   await startBridgeListener();

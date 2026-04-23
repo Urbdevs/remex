@@ -139,9 +139,15 @@ remittanceWorker.on('completed', (job) => {
 remittanceWorker.on('failed', async (job, err) => {
   logger.error({ jobId: job?.id, remittanceId: job?.data.remittanceId, err }, 'Job failed');
 
-  // Si el job agotó todos sus reintentos, registrar refund en DB y notificar
+  // Si el job agotó todos sus reintentos, llamar refund() on-chain y notificar
   if (job && job.attemptsMade >= (job.opts.attempts ?? 3)) {
     const db = getDB();
+
+    // Llamar refund() en el contrato — devuelve USDC al sender
+    bridgeService.refund(job.data.remittanceId, err.message.slice(0, 200)).catch((refundErr) =>
+      logger.error({ refundErr, remittanceId: job.data.remittanceId }, 'On-chain refund() call failed'),
+    );
+
     await db`
       UPDATE remittances
       SET status        = 'refunded',
