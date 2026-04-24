@@ -111,5 +111,6 @@ export function isValidPhone(phone: string): boolean {
 
 /** Convert USD amount to microUSDC bigint */
 export function toMicroUsdc(amountUsd: number): bigint {
-  return BigInt(Math.round(amountUsd * 1_000_000));
+  const n = isNaN(amountUsd) ? 0 : amountUsd;
+  return BigInt(Math.round(n * 1_000_000));
 }

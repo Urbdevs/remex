@@ -1,5 +1,4 @@
 {
-  "/page": "app/page.js",
   "/send/page": "app/send/page.js",
   "/api/fx-rate/route": "app/api/fx-rate/route.js"
 }

@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { parseUnits } from 'viem';
 import { useAccount, useReadContract } from 'wagmi';
 import { useWriteContract } from 'wagmi';
 import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
 import { useQuery } from '@tanstack/react-query';
 import { Button }      from '@/components/ui/Button';
 import { useAuth }     from '@/components/providers';
-import { estimateMxn, formatMxn, formatUsd, hashString, toMicroUsdc, FEE_BPS } from '@/lib/utils';
+import { estimateMxn, formatMxn, formatUsd, hashString, FEE_BPS } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { REMEX_BRIDGE_ABI, ERC20_ABI } from '@/lib/abis';
 import { CONTRACT_ADDRESS, USDC_ADDRESS, wagmiConfig } from '@/lib/wagmi';
@@ -38,9 +39,6 @@ export function Step3Confirm({ form, update, onNext, onBack }: Props) {
   const fxRate = fxData?.rate ?? 17.50;
   const est    = estimateMxn(form.amountUsd, fxRate);
 
-  // Amount in microUSDC
-  const amountUsdc = toMicroUsdc(form.amountUsd);
-
   const { writeContractAsync } = useWriteContract();
 
   const STEP_LABELS: Record<TxStep, string> = {
@@ -57,6 +55,13 @@ export function Step3Confirm({ form, update, onNext, onBack }: Props) {
   async function handleSend() {
     if (!address) return;
     setErrorMsg('');
+
+    const amountUsdc = parseUnits(form.amountUsd.toString(), 6);
+    if (amountUsdc === 0n) {
+      setErrorMsg('Monto inválido. Por favor regresa al paso 1.');
+      setTxStep('error');
+      return;
+    }
 
     try {
       // 1. Save recipient info
